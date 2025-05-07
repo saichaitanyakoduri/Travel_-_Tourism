@@ -1,340 +1,203 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import {
-  insertUserSchema,
-  insertFlightBookingSchema,
-  insertHotelBookingSchema,
-  insertBusBookingSchema,
-  insertTrainBookingSchema,
-  insertNewsletterSubscriptionSchema
-} from "@shared/schema";
-import session from "express-session";
 import { z } from "zod";
-
-// JWT secret key
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret_key";
-
-// Middleware to verify JWT token
-const authenticateToken = (req: Request, res: Response, next: any) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: "Authentication token required" });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
-    if (err) {
-      return res.status(403).json({ message: "Invalid or expired token" });
-    }
-    
-    req.body.user = user;
-    next();
-  });
-};
+import { insertBookingSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Configure session middleware
-  app.use(
-    session({
-      secret: "travelworld_session_secret",
-      resave: false,
-      saveUninitialized: false,
-      cookie: { secure: process.env.NODE_ENV === "production", maxAge: 24 * 60 * 60 * 1000 } // 24 hours
-    })
-  );
+  // Setup authentication
+  setupAuth(app);
 
-  // Authentication routes
-  app.post("/api/auth/signup", async (req, res) => {
+  // API routes
+  app.get("/api/hotels", async (req, res) => {
     try {
-      const userData = insertUserSchema.parse(req.body);
+      const hotels = await storage.getHotels();
+      res.json(hotels);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch hotels" });
+    }
+  });
+
+  app.get("/api/hotels/:id", async (req, res) => {
+    try {
+      const hotelId = parseInt(req.params.id);
+      const hotel = await storage.getHotel(hotelId);
       
-      // Check if user already exists
-      const existingUser = await storage.getUserByEmail(userData.email);
-      if (existingUser) {
-        return res.status(409).json({ message: "User with this email already exists" });
+      if (!hotel) {
+        return res.status(404).json({ error: "Hotel not found" });
       }
       
-      // Hash password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(userData.password, salt);
+      res.json(hotel);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch hotel details" });
+    }
+  });
+
+  app.get("/api/buses", async (req, res) => {
+    try {
+      const buses = await storage.getBuses();
+      res.json(buses);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch buses" });
+    }
+  });
+
+  app.get("/api/buses/search", async (req, res) => {
+    try {
+      const { from, to, date } = req.query;
       
-      // Create new user with hashed password
-      const newUser = await storage.createUser({
-        ...userData,
-        password: hashedPassword
-      });
+      if (!from || !to || !date) {
+        return res.status(400).json({ error: "Missing required search parameters" });
+      }
       
-      // Generate JWT token
-      const token = jwt.sign(
-        { id: newUser.id, email: newUser.email },
-        JWT_SECRET,
-        { expiresIn: "24h" }
-      );
+      const buses = await storage.searchBuses(from.toString(), to.toString(), date.toString());
+      res.json(buses);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search buses" });
+    }
+  });
+
+  app.get("/api/buses/:id", async (req, res) => {
+    try {
+      const busId = parseInt(req.params.id);
+      const bus = await storage.getBus(busId);
       
-      // Return user data (excluding password) and token
-      const { password, ...userWithoutPassword } = newUser;
-      res.status(201).json({
-        user: userWithoutPassword,
-        token
-      });
+      if (!bus) {
+        return res.status(404).json({ error: "Bus not found" });
+      }
+      
+      res.json(bus);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bus details" });
+    }
+  });
+
+  app.get("/api/trains", async (req, res) => {
+    try {
+      const trains = await storage.getTrains();
+      res.json(trains);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch trains" });
+    }
+  });
+
+  app.get("/api/trains/search", async (req, res) => {
+    try {
+      const { from, to, date } = req.query;
+      
+      if (!from || !to || !date) {
+        return res.status(400).json({ error: "Missing required search parameters" });
+      }
+      
+      const trains = await storage.searchTrains(from.toString(), to.toString(), date.toString());
+      res.json(trains);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search trains" });
+    }
+  });
+
+  app.get("/api/trains/:id", async (req, res) => {
+    try {
+      const trainId = parseInt(req.params.id);
+      const train = await storage.getTrain(trainId);
+      
+      if (!train) {
+        return res.status(404).json({ error: "Train not found" });
+      }
+      
+      res.json(train);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch train details" });
+    }
+  });
+
+  app.get("/api/destinations", async (req, res) => {
+    try {
+      const destinations = await storage.getDestinations();
+      res.json(destinations);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch destinations" });
+    }
+  });
+
+  app.get("/api/destinations/:id", async (req, res) => {
+    try {
+      const destinationId = parseInt(req.params.id);
+      const destination = await storage.getDestination(destinationId);
+      
+      if (!destination) {
+        return res.status(404).json({ error: "Destination not found" });
+      }
+      
+      res.json(destination);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch destination details" });
+    }
+  });
+
+  // Protected routes
+  app.get("/api/bookings", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const bookings = await storage.getBookings(userId);
+      res.json(bookings);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch bookings" });
+    }
+  });
+
+  app.post("/api/bookings", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const bookingData = { ...req.body, userId };
+      
+      // Validate booking data
+      const validatedData = insertBookingSchema.parse(bookingData);
+      
+      const booking = await storage.createBooking(validatedData);
+      
+      // Send email notification for booking confirmation
+      // In a real implementation, this would use EmailJS
+      // For this example, we'll just log the event
+      console.log(`Booking confirmation email would be sent to ${req.user!.email} for booking ID ${booking.id}`);
+      
+      res.status(201).json(booking);
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid user data", errors: error.errors });
+        return res.status(400).json({ error: "Invalid booking data", details: error.errors });
       }
-      res.status(500).json({ message: "Server error during registration" });
+      res.status(500).json({ error: "Failed to create booking" });
     }
   });
-  
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      
-      if (!email || !password) {
-        return res.status(400).json({ message: "Email and password are required" });
-      }
-      
-      // Find user by email
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      
-      // Verify password
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-      
-      // Generate JWT token
-      const token = jwt.sign(
-        { id: user.id, email: user.email },
-        JWT_SECRET,
-        { expiresIn: "24h" }
-      );
-      
-      // Return user data (excluding password) and token
-      const { password: _, ...userWithoutPassword } = user;
-      res.status(200).json({
-        user: userWithoutPassword,
-        token
-      });
-    } catch (error) {
-      res.status(500).json({ message: "Server error during login" });
-    }
-  });
-  
-  // User profile route
-  app.get("/api/user/profile", authenticateToken, async (req, res) => {
-    try {
-      const userId = req.body.user.id;
-      const user = await storage.getUser(userId);
-      
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-      
-      const { password, ...userWithoutPassword } = user;
-      res.status(200).json({ user: userWithoutPassword });
-    } catch (error) {
-      res.status(500).json({ message: "Server error fetching user profile" });
-    }
-  });
-  
-  // Flight booking routes
-  app.post("/api/bookings/flight", authenticateToken, async (req, res) => {
-    try {
-      const bookingData = insertFlightBookingSchema.parse(req.body);
-      const booking = await storage.createFlightBooking(bookingData);
-      res.status(201).json({ booking });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid booking data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Server error creating flight booking" });
-    }
-  });
-  
-  app.get("/api/bookings/flight/:id", authenticateToken, async (req, res) => {
+
+  app.get("/api/bookings/:id", isAuthenticated, async (req, res) => {
     try {
       const bookingId = parseInt(req.params.id);
-      const booking = await storage.getFlightBooking(bookingId);
+      const booking = await storage.getBooking(bookingId);
       
       if (!booking) {
-        return res.status(404).json({ message: "Flight booking not found" });
+        return res.status(404).json({ error: "Booking not found" });
       }
       
-      res.status(200).json({ booking });
-    } catch (error) {
-      res.status(500).json({ message: "Server error fetching flight booking" });
-    }
-  });
-  
-  app.post("/api/bookings/flight/:id/email-sent", authenticateToken, async (req, res) => {
-    try {
-      const bookingId = parseInt(req.params.id);
-      await storage.updateFlightBookingEmailStatus(bookingId, true);
-      res.status(200).json({ message: "Email status updated successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Server error updating email status" });
-    }
-  });
-  
-  // Hotel booking routes
-  app.post("/api/bookings/hotel", authenticateToken, async (req, res) => {
-    try {
-      const bookingData = insertHotelBookingSchema.parse(req.body);
-      const booking = await storage.createHotelBooking(bookingData);
-      res.status(201).json({ booking });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid booking data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Server error creating hotel booking" });
-    }
-  });
-  
-  app.get("/api/bookings/hotel/:id", authenticateToken, async (req, res) => {
-    try {
-      const bookingId = parseInt(req.params.id);
-      const booking = await storage.getHotelBooking(bookingId);
-      
-      if (!booking) {
-        return res.status(404).json({ message: "Hotel booking not found" });
+      // Ensure users can only access their own bookings
+      if (booking.userId !== req.user!.id) {
+        return res.status(403).json({ error: "Access denied" });
       }
       
-      res.status(200).json({ booking });
+      res.json(booking);
     } catch (error) {
-      res.status(500).json({ message: "Server error fetching hotel booking" });
+      res.status(500).json({ error: "Failed to fetch booking details" });
     }
   });
-  
-  app.post("/api/bookings/hotel/:id/email-sent", authenticateToken, async (req, res) => {
-    try {
-      const bookingId = parseInt(req.params.id);
-      await storage.updateHotelBookingEmailStatus(bookingId, true);
-      res.status(200).json({ message: "Email status updated successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Server error updating email status" });
+
+  // Helper middleware to check if user is authenticated
+  function isAuthenticated(req: Request, res: Response, next: Function) {
+    if (req.isAuthenticated()) {
+      return next();
     }
-  });
-  
-  // Bus booking routes
-  app.post("/api/bookings/bus", authenticateToken, async (req, res) => {
-    try {
-      const bookingData = insertBusBookingSchema.parse(req.body);
-      const booking = await storage.createBusBooking(bookingData);
-      res.status(201).json({ booking });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid booking data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Server error creating bus booking" });
-    }
-  });
-  
-  app.get("/api/bookings/bus/:id", authenticateToken, async (req, res) => {
-    try {
-      const bookingId = parseInt(req.params.id);
-      const booking = await storage.getBusBooking(bookingId);
-      
-      if (!booking) {
-        return res.status(404).json({ message: "Bus booking not found" });
-      }
-      
-      res.status(200).json({ booking });
-    } catch (error) {
-      res.status(500).json({ message: "Server error fetching bus booking" });
-    }
-  });
-  
-  app.post("/api/bookings/bus/:id/email-sent", authenticateToken, async (req, res) => {
-    try {
-      const bookingId = parseInt(req.params.id);
-      await storage.updateBusBookingEmailStatus(bookingId, true);
-      res.status(200).json({ message: "Email status updated successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Server error updating email status" });
-    }
-  });
-  
-  // Train booking routes
-  app.post("/api/bookings/train", authenticateToken, async (req, res) => {
-    try {
-      const bookingData = insertTrainBookingSchema.parse(req.body);
-      const booking = await storage.createTrainBooking(bookingData);
-      res.status(201).json({ booking });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid booking data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Server error creating train booking" });
-    }
-  });
-  
-  app.get("/api/bookings/train/:id", authenticateToken, async (req, res) => {
-    try {
-      const bookingId = parseInt(req.params.id);
-      const booking = await storage.getTrainBooking(bookingId);
-      
-      if (!booking) {
-        return res.status(404).json({ message: "Train booking not found" });
-      }
-      
-      res.status(200).json({ booking });
-    } catch (error) {
-      res.status(500).json({ message: "Server error fetching train booking" });
-    }
-  });
-  
-  app.post("/api/bookings/train/:id/email-sent", authenticateToken, async (req, res) => {
-    try {
-      const bookingId = parseInt(req.params.id);
-      await storage.updateTrainBookingEmailStatus(bookingId, true);
-      res.status(200).json({ message: "Email status updated successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Server error updating email status" });
-    }
-  });
-  
-  // Booking history route
-  app.get("/api/bookings/history", authenticateToken, async (req, res) => {
-    try {
-      const userId = req.body.user.id;
-      const bookings = await storage.getAllUserBookings(userId);
-      res.status(200).json({ bookings });
-    } catch (error) {
-      res.status(500).json({ message: "Server error fetching booking history" });
-    }
-  });
-  
-  // Newsletter subscription route
-  app.post("/api/newsletter/subscribe", async (req, res) => {
-    try {
-      const subscriptionData = insertNewsletterSubscriptionSchema.parse(req.body);
-      
-      // Check if email is already subscribed
-      const existingSubscriptions = Array.from(storage.getAllUserBookings(0));
-      const isAlreadySubscribed = existingSubscriptions.some(booking => 
-        'email' in req.body && req.body.email === booking.email
-      );
-      
-      if (isAlreadySubscribed) {
-        return res.status(409).json({ message: "This email is already subscribed to the newsletter" });
-      }
-      
-      const subscription = await storage.createNewsletterSubscription(subscriptionData);
-      res.status(201).json({ subscription, message: "Successfully subscribed to the newsletter" });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Invalid subscription data", errors: error.errors });
-      }
-      res.status(500).json({ message: "Server error creating newsletter subscription" });
-    }
-  });
+    res.status(401).json({ error: "Unauthorized" });
+  }
 
   const httpServer = createServer(app);
   return httpServer;

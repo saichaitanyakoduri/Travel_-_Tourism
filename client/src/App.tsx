@@ -1,35 +1,40 @@
 import { Switch, Route } from "wouter";
-import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AuthProvider } from "@/hooks/use-auth";
+import { ProtectedRoute } from "./lib/protected-route";
 import NotFound from "@/pages/not-found";
-import ComingSoon from "./pages/ComingSoon";
-import Navbar from "./components/Navbar";
-import Footer from "./components/Footer";
-import Home from "./pages/Home";
-import FlightBooking from "./pages/FlightBooking";
-import HotelBooking from "./pages/HotelBooking";
-import BusBooking from "./pages/BusBooking";
-import TrainBooking from "./pages/TrainBooking";
-import Profile from "./pages/Profile";
-import BookingHistory from "./pages/BookingHistory";
-import ChatbotWidget from "./components/ChatbotWidget";
+import HomePage from "@/pages/home-page";
+import AuthPage from "@/pages/auth-page";
+import HotelBooking from "@/pages/hotel-booking";
+import BusBooking from "@/pages/bus-booking";
+import TrainBooking from "@/pages/train-booking";
+import BusesPage from "@/pages/buses-page";
+import HotelsPage from "@/pages/hotels-page";
+import TrainsPage from "@/pages/trains-page";
+import FlightsPage from "@/pages/flights-page";
+import DealsPage from "@/pages/deals-page";
+import ProfilePage from "@/pages/profile-page";
+import '@/styles/global.css';
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Home} />
-      <Route path="/flights" component={FlightBooking} />
-      <Route path="/hotels" component={HotelBooking} />
-      <Route path="/buses" component={BusBooking} />
-      <Route path="/trains" component={TrainBooking} />
-      <Route path="/packages" component={ComingSoon} />
-      <Route path="/deals" component={ComingSoon} />
-      <Route path="/activities" component={ComingSoon} />
-      <Route path="/travel-guides" component={ComingSoon} />
-      <Route path="/profile" component={Profile} />
-      <Route path="/booking-history" component={BookingHistory} />
+      <Route path="/" component={HomePage} />
+      <Route path="/auth" component={AuthPage} />
+      <Route path="/hotels" component={HotelsPage} />
+      <Route path="/hotels/:id" component={HotelBooking} />
+      <Route path="/buses" component={BusesPage} />
+      <Route path="/buses/:id" component={BusBooking} />
+      <Route path="/trains" component={TrainsPage} />
+      <Route path="/trains/:id" component={TrainBooking} />
+      <Route path="/flights" component={FlightsPage} />
+      <Route path="/deals" component={DealsPage} />
+      <ProtectedRoute path="/profile" component={ProfilePage} />
+      <ProtectedRoute path="/profile/bookings" component={ProfilePage} />
+      <ProtectedRoute path="/profile/settings" component={ProfilePage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -38,17 +43,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <div className="app-wrapper">
-          <Navbar />
-          <main>
-            <Router />
-          </main>
-          <Footer />
-          <ChatbotWidget />
-        </div>
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
